@@ -2,6 +2,7 @@ use crate::{AuthValidator, JwtError, JwtSecret};
 use http::{header, HeaderMap, Response, StatusCode};
 use jsonrpsee_http_client::{HttpBody, HttpResponse};
 use tracing::error;
+use std::backtrace::Backtrace;
 
 /// Implements JWT validation logics and integrates
 /// to an Http [`AuthLayer`][crate::AuthLayer]
@@ -32,8 +33,18 @@ impl AuthValidator for JwtAuthValidator {
                 }
             },
             None => {
+                let headers_info: Vec<String> = headers
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("<invalid UTF-8>")))
+                    .collect();
+                let headers_string = headers_info.join(", ");
+                let backtrace = Backtrace::force_capture();
+                
                 let e = JwtError::MissingOrInvalidAuthorizationHeader;
-                error!(target: "engine::jwt-validator", "Invalid JWT: (None but OK) {e}");
+                error!(
+                    target: "engine::jwt-validator",
+                    "Invalid JWT: (None but OK) {e}. Headers: [{headers_string}]. Call stack: {backtrace}"
+                );
                 let response = err_response(e);
                 Ok(())
             }
